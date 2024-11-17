@@ -4,14 +4,67 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
+import { Proof, WebProof } from '@vlayer/sdk'
+import { callProver, getVerified, getWebProof } from '@/lib/prove'
+import { Hex } from "viem";
+
+
+type ClaimStep = 'initial' | 'start' | 'prover' | 'verifier' | 'success'
 
 export default function OpenChallenges() {
     const [challengeStatus, setChallengeStatus] = useState<'Active' | 'Success'>('Active')
-    const [showButtons, setShowButtons] = useState(true)
+    const [claimStep, setClaimStep] = useState<ClaimStep>('initial')
 
-    const handleClaimSuccess = () => {
+    const [webProof, setWebProof] = useState<WebProof | null>(null)
+    const [proof, setProof] = useState<Proof | null>(null)
+    const [proofId, setProofId] = useState<string | null>(null)
+    const [proofHash, setProofHash] = useState<Hex | null>(null)
+
+    const handleStartClaim = async () => {
+        console.log("Starting claim process")
+        const webProof = await getWebProof()
+        setWebProof(webProof)
+        setClaimStep('start')
+    }
+
+    const handleCallProver = async () => {
+        console.log("Calling prover")
+        if (!webProof) {
+            console.error("WebProof is null")
+            return
+        }
+        const [proof, proofId, proofHash] = await callProver(webProof)
+        console.log("Proof:", proof)
+        console.log("Proof ID:", proofId)
+        console.log("Proof Hash:", proofHash)
+        setProof(proof)
+        setProofId(proofId)
+        setProofHash(proofHash)
+        setClaimStep('prover')
+    }
+
+    const handleCallVerifier = async () => {
+        console.log("Calling verifier")
+        if (!proof || !proofId || !proofHash) {
+            console.error("Proof, proofId, or proofHash is null")
+            return
+        }
+        await getVerified(proof, proofId, proofHash);
+        setClaimStep('success')
         setChallengeStatus('Success')
-        setShowButtons(false)
+    }
+
+    const getClaimButton = () => {
+        switch (claimStep) {
+            case 'initial':
+                return <Button onClick={handleStartClaim} variant="default">Start Claim</Button>
+            case 'start':
+                return <Button onClick={handleCallProver} variant="default">Call Prover</Button>
+            case 'prover':
+                return <Button onClick={handleCallVerifier} variant="default">Call Verifier</Button>
+            default:
+                return null
+        }
     }
 
     return (
@@ -35,7 +88,11 @@ export default function OpenChallenges() {
                 <Card className="max-w-2xl mx-auto">
                     <CardHeader>
                         <div className="flex justify-between items-center">
-                            <CardTitle className="text-2xl font-bold">Benjakitti - gate to path end</CardTitle>
+                            <CardTitle className="text-2xl font-bold">
+                                <Link href="https://www.strava.com/segments/25981978" className="hover:underline" target="_blank" rel="noopener noreferrer">
+                                    Benjakitti - gate to path end
+                                </Link>
+                            </CardTitle>
                             <div
                                 className={`px-3 py-1 rounded-md text-white font-medium ${challengeStatus === 'Active' ? 'bg-green-500' : 'bg-blue-500'
                                     }`}
@@ -47,15 +104,17 @@ export default function OpenChallenges() {
                     </CardHeader>
                     <CardContent className="space-y-2">
                         <p><strong>Deadline:</strong> Nov 27, 2024</p>
-                        <p><strong>Max Time:</strong> 500 seconds</p>
+                        <p><strong>Max Time:</strong> 8 Minutes 20 seconds</p>
                         <p><strong>Description:</strong> Raising money for charity trying to set a Strava record on this segment. Donate to 0xa0Ee7A142d267C1f36714E4a8F75612F20a79720 to support me! If I fail, the money will be sent to Bitboy instead.</p>
                     </CardContent>
-                    {showButtons && (
-                        <CardFooter className="flex justify-end space-x-2">
-                            <Button onClick={handleClaimSuccess} variant="default">Claim Success</Button>
-                            <Button variant="destructive">Claim Failure</Button>
-                        </CardFooter>
-                    )}
+                    <CardFooter className="flex justify-end space-x-2">
+                        {claimStep !== 'success' && (
+                            <>
+                                {getClaimButton()}
+                                <Button variant="destructive">Claim Failure</Button>
+                            </>
+                        )}
+                    </CardFooter>
                 </Card>
             </main>
 
